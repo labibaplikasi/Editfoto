@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Studio Foto AI</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<style>
+  html,body,#root{height:100%;margin:0;background:#020617}
+  .no-scrollbar{scrollbar-width:none}.no-scrollbar::-webkit-scrollbar{display:none}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+/* ---------- Konstanta ---------- */
+const DEFAULT_CFG = { base: 'https://api.kagiro.net/v1', key: '', model: '', mode: 'images' };
+const SIZES = { '1:1': '1024x1024', '16:9': '1792x1024', '9:16': '1024x1792', '4:3': '1280x960', '3:4': '960x1280' };
+const DEFAULT_ADJ = { brightness: 100, contrast: 100, saturation: 100, sepia: 0, grayscale: 0, blur: 0, hue: 0, rotation: 0, flipH: false, flipV: false };
+const CARD = 'rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5';
+
+const FILTER_PRESETS = [
+  { id: 'normal', name: 'Normal' },
+  { id: 'vivid', name: 'Vivid', brightness: 108, contrast: 120, saturation: 140 },
+  { id: 'bw', name: 'Hitam Putih', brightness: 105, contrast: 125, saturation: 0, grayscale: 100 },
+  { id: 'vintage', name: 'Vintage', contrast: 95, saturation: 80, sepia: 45 },
+  { id: 'cyberpunk', name: 'Cyberpunk', brightness: 105, contrast: 130, saturation: 160, hue: 195 },
+  { id: 'warm', name: 'Hangat', brightness: 103, contrast: 105, saturation: 115, sepia: 25, hue: -10 },
+  { id: 'dramatic', name: 'Dramatis', brightness: 92, contrast: 145, saturation: 75, sepia: 10, grayscale: 20 },
+];
+const QUICK_PROMPTS = [
+  'Buat foto kucing astronot di bulan dengan gaya sinematik',
+  'Pemandangan gunung berapi di Indonesia saat matahari terbit, fotorealistik',
+  'Ubah latar belakang foto ini menjadi kota cyberpunk malam hari',
+  'Tambahkan kacamata hitam dan jaket kulit pada subjek di foto',
+  'Jadikan gambar ini seperti lukisan cat minyak gaya Van Gogh',
+];
+const MAGIC = [
+  { label: 'Hapus Background', prompt: 'Remove the background and make it a clean white studio background' },
+  { label: 'Gaya Anime', prompt: 'Transform this image into a high quality anime style illustration' },
+  { label: 'Tingkatkan HD', prompt: 'Enhance image details, studio lighting, sharp focus, photorealistic quality' },
+  { label: 'Suasana Malam', prompt: 'Change the lighting and atmosphere into dramatic night time with neon lights' },
+];
+
+const ICONS = {
+  send: 'M22 2 11 13M22 2l-7 20-4-9-9-4z',
+  upload: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12',
+  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  undo: 'M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 8',
+  redo: 'M21 7v6h-6M21 13a9 9 0 1 1-3-7.7L21 8',
+  rotate: 'M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5',
+  flipH: 'M12 3v18M8 7 3 12l5 5V7zM16 7l5 5-5 5V7z',
+  flipV: 'M3 12h18M7 8l5-5 5 5H7zM7 16l5 5 5-5H7z',
+  sparkles: 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z',
+  settings: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1',
+  plus: 'M12 5v14M5 12h14',
+  eye: 'M2 12s4-8 10-8 10 8 10 8-4 8-10 8S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  check: 'M20 6 9 17l-5-5',
+  x: 'M18 6 6 18M6 6l12 12',
+  image: 'M3 3h18v18H3zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM21 15l-5-5L5 21',
+  chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  sliders: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
+};
+const Ic = ({ n, c = 'w-4 h-4' }) => (
+  <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={ICONS[n]} /></svg>
+);
+
+/* ---------- Helper ---------- */
+const uid = () => Math.random().toString(36).slice(2);
+const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const parseDataUrl = (u) => { const m = /^data:(.*?);base64,(.*)$/.exec(u); return { mimeType: m?.[1] || 'image/png', base64: m?.[2] || '' }; };
+const toImg = (dataUrl, source) => ({ dataUrl, source, ...parseDataUrl(dataUrl) });
+const dataUrlToBlob = (u) => { const { mimeType, base64 } = parseDataUrl(u); const b = atob(base64); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return new Blob([a], { type: mimeType }); };
+const blobToDataUrl = (b) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
+
+const renderInline = (text) => text.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*)/g).map((p, i) => {
+  if (/^\*\*.+\*\*$/.test(p)) return <strong key={i} className="font-semibold text-white">{p.slice(2, -2)}</strong>;
+  if (/^\*.+\*$/.test(p)) return <em key={i} className="text-indigo-200">{p.slice(1, -1)}</em>;
+  return p;
+});
+
+async function remoteToDataUrl(url) {
+  try { const r = await fetch(url); return await blobToDataUrl(await r.blob()); } catch { return url; }
+}
+
+async function request(url, init, retries = 2) {
+  let last;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(url, init);
+      const json = await res.json().catch(() => ({}));
+      if (res.ok) return json;
+      const err = new Error(json?.error?.message || json?.message || `HTTP ${res.status}`);
+      if (res.status !== 429 && res.status < 500) { err.fatal = true; throw err; }
+      last = err;
+    } catch (e) {
+      if (e.fatal) throw e;
+      last = e.name === 'TypeError' ? new Error('Tidak bisa terhubung ke API (jaringan/CORS). Periksa URL dan koneksi.') : e;
+    }
+    if (i < retries) await new Promise(r => setTimeout(r, 1000 * 2 ** i));
+  }
+  throw last;
+}
+
+/* Panggil API kustom: mode 'images' (/images/generations & /images/edits) atau 'chat' (/chat/completions) */
+async function callApi(cfg, { prompt, image, aspect }) {
+  const base = cfg.base.trim().replace(/\/+$/, '');
+  const auth = { Authorization: `Bearer ${cfg.key.trim()}` };
+  if (cfg.mode === 'images') {
+    let json;
+    if (image) {
+      const fd = new FormData();
+      fd.append('model', cfg.model); fd.append('prompt', prompt);
+      fd.append('image', dataUrlToBlob(image.dataUrl), 'image.png');
+      json = await request(`${base}/images/edits`, { method: 'POST', headers: auth, body: fd });
+    } else {
+      json = await request(`${base}/images/generations`, {
+        method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: cfg.model, prompt, size: SIZES[aspect], n: 1 }),
+      });
+    }
+    const d = json?.data?.[0];
+    if (d?.b64_json) return { dataUrl: `data:image/png;base64,${d.b64_json}`, text: d.revised_prompt || '' };
+    if (d?.url) return { dataUrl: await remoteToDataUrl(d.url), text: d.revised_prompt || '' };
+    return { dataUrl: null, text: '' };
+  }
+  const content = image
+    ? [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: image.dataUrl } }]
+    : `${prompt}\n\n(Rasio gambar: ${aspect})`;
+  const json = await request(`${base}/chat/completions`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: cfg.model, messages: [{ role: 'user', content }] }),
+  });
+  const msg = json?.choices?.[0]?.message || {};
+  const raw = typeof msg.content === 'string' ? msg.content : (msg.content || []).map(p => p.text || p.image_url?.url || '').join('\n');
+  let url = msg.images?.[0]?.image_url?.url || (raw.match(/data:image\/[a-z+.-]+;base64,[A-Za-z0-9+/=]+/) || [])[0] || (raw.match(/https?:\/\/[^\s)"'\]]+/) || [])[0];
+  const text = raw.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/data:image\/[a-z+.-]+;base64,[A-Za-z0-9+/=]+/g, '').trim();
+  if (url && !url.startsWith('data:')) url = await remoteToDataUrl(url);
+  return { dataUrl: url || null, text };
+}
+
+function Slider({ label, unit = '%', value, min, max, disabled, onChange }) {
+  return (
+    <div>
+      <div className="flex justify-between text-xs text-slate-400 mb-1.5">
+        <span>{label}</span><span className="tabular-nums text-slate-300">{value}{unit}</span>
+      </div>
+      <input type="range" min={min} max={max} disabled={disabled} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-indigo-500 h-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed" />
+    </div>
+  );
+}
+
+/* ---------- Dialog Pengaturan API ---------- */
+function SettingsModal({ cfg, onSave, onClose }) {
+  const [f, setF] = useState(cfg);
+  const [models, setModels] = useState([]);
+  const [status, setStatus] = useState('');
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const input = 'w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm text-slate-100 outline-none';
+
+  const loadModels = async () => {
+    setStatus('Memuat daftar model...');
+    try {
+      const j = await request(`${f.base.trim().replace(/\/+$/, '')}/models`, { headers: { Authorization: `Bearer ${f.key.trim()}` } }, 0);
+      const ids = (j.data || []).map(m => m.id).filter(Boolean);
+      setModels(ids);
+      setStatus(ids.length ? `Terhubung. ${ids.length} model ditemukan, pilih dari kolom Model.` : 'Terhubung, tapi daftar model kosong. Ketik nama model manual.');
+    } catch (e) { setStatus(`Gagal: ${e.message}`); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-5 space-y-4 max-h-full overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-base">Pengaturan API</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white cursor-pointer"><Ic n="x" /></button>
+        </div>
+        <label className="block text-xs text-slate-400 space-y-1.5">URL API
+          <input className={input} value={f.base} onChange={set('base')} placeholder="https://api.kagiro.net/v1" /></label>
+        <label className="block text-xs text-slate-400 space-y-1.5">API Key
+          <input className={input} type="password" value={f.key} onChange={set('key')} placeholder="sk-..." autoComplete="off" /></label>
+        <label className="block text-xs text-slate-400 space-y-1.5">Model (bebas diketik)
+          <input className={input} list="model-list" value={f.model} onChange={set('model')} placeholder="mis. gpt-image-1" />
+          <datalist id="model-list">{models.map(m => <option key={m} value={m} />)}</datalist></label>
+        <label className="block text-xs text-slate-400 space-y-1.5">Format endpoint
+          <select className={input} value={f.mode} onChange={set('mode')}>
+            <option value="images">Images API (/images/generations, /images/edits)</option>
+            <option value="chat">Chat Completions (/chat/completions)</option>
+          </select></label>
+        <button onClick={loadModels} className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium cursor-pointer">Tes koneksi & ambil daftar model</button>
+        {status && <p className="text-xs text-slate-300 leading-relaxed">{status}</p>}
+        <p className="text-[11px] text-slate-500 leading-relaxed">Pengaturan disimpan di browser ini saja (localStorage). Jangan bagikan file ini setelah mengisi API key.</p>
+        <button onClick={() => onSave(f)} disabled={!f.base.trim() || !f.key.trim() || !f.model.trim()}
+          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold cursor-pointer">Simpan</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Aplikasi ---------- */
+function App() {
+  const [cfg, setCfg] = useState(() => { try { return { ...DEFAULT_CFG, ...JSON.parse(localStorage.getItem('sfai_cfg') || '{}') }; } catch { return DEFAULT_CFG; } });
+  const [showSettings, setShowSettings] = useState(false);
+  const [cur, setCur] = useState(null);
+  const [hist, setHist] = useState({ items: [], index: -1 });
+  const [messages, setMessages] = useState([{ id: 'w', role: 'assistant', timestamp: now(),
+    text: 'Halo! Selamat datang di **Studio Foto AI**.\n\n1. **Buat foto baru**: ketik deskripsinya di chat.\n2. **Edit via chat**: unggah foto atau pakai foto hasil AI, lalu minta perubahan (*"Ubah background jadi pantai"*).\n3. **Edit manual**: atur kecerahan, filter, dan rotasi di panel Alat Edit.\n\nAtur API dan model dulu lewat tombol **API** di pojok kanan atas.' }]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState('auto');
+  const [aspect, setAspect] = useState('1:1');
+  const [adj, setAdj] = useState({ ...DEFAULT_ADJ });
+  const [filter, setFilter] = useState('normal');
+  const [tab, setTab] = useState('chat');
+  const [toast, setToast] = useState(null);
+  const [compare, setCompare] = useState(false);
+  const [stage, setStage] = useState({ w: 0, h: 0 });
+  const [nat, setNat] = useState({ w: 0, h: 0 });
+  const fileRef = useRef(null), chatRef = useRef(null), stageRef = useRef(null), imgRef = useRef(null), toastT = useRef(null), histRef = useRef(hist);
+
+  useEffect(() => { if (!cfg.key || !cfg.model) setShowSettings(true); }, []);
+  useEffect(() => { const el = chatRef.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); }, [messages, busy, tab]);
+  useEffect(() => {
+    const ro = new ResizeObserver(([e]) => setStage({ w: e.contentRect.width, h: e.contentRect.height }));
+    ro.observe(stageRef.current); return () => ro.disconnect();
+  }, []);
+
+  const showToast = (message, type = 'info') => { clearTimeout(toastT.current); setToast({ message, type }); toastT.current = setTimeout(() => setToast(null), 4000); };
+  const say = (m) => setMessages(p => [...p, { id: uid(), timestamp: now(), ...m }]);
+  const resetAdj = () => { setAdj({ ...DEFAULT_ADJ }); setFilter('normal'); };
+  const syncHist = (h) => { histRef.current = h; setHist(h); };
+  const push = (img) => { const { items, index } = histRef.current; const next = [...items.slice(0, index + 1), img]; syncHist({ items: next, index: next.length - 1 }); setCur(img); resetAdj(); };
+  const goTo = (i) => { const it = histRef.current.items[i]; if (!it) return; syncHist({ ...histRef.current, index: i }); setCur(it); resetAdj(); };
+  const openInCanvas = (u) => { if (cur?.dataUrl !== u) push(toImg(u, 'edited')); setTab('canvas'); };
+
+  const isDirty = Object.keys(DEFAULT_ADJ).some(k => adj[k] !== DEFAULT_ADJ[k]);
+  const rotated = Math.abs(adj.rotation % 180) === 90;
+  const effW = rotated ? nat.h : nat.w, effH = rotated ? nat.w : nat.h;
+  const fit = effW && effH && stage.w && stage.h ? Math.min(stage.w / effW, stage.h / effH) : 0;
+  const cssFilter = (blurPx) => `brightness(${adj.brightness}%) contrast(${adj.contrast}%) saturate(${adj.saturation}%) sepia(${adj.sepia}%) grayscale(${adj.grayscale}%) blur(${blurPx}px) hue-rotate(${adj.hue}deg)`;
+
+  const bake = () => new Promise((resolve) => {
+    if (!cur) return resolve(null);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'), ctx = c.getContext('2d');
+      c.width = rotated ? img.height : img.width; c.height = rotated ? img.width : img.height;
+      ctx.filter = cssFilter((adj.blur * (fit ? 1 / fit : 1)).toFixed(2));
+      ctx.translate(c.width / 2, c.height / 2);
+      ctx.rotate((adj.rotation * Math.PI) / 180);
+      ctx.scale(adj.flipH ? -1 : 1, adj.flipV ? -1 : 1);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      resolve(toImg(c.toDataURL('image/png'), cur.source));
+    };
+    img.onerror = () => resolve(null);
+    img.src = cur.dataUrl;
+  });
+
+  const upload = (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return showToast('Pilih file gambar (PNG, JPG, WEBP).', 'error');
+    const r = new FileReader();
+    r.onload = (ev) => {
+      push(toImg(ev.target.result, 'upload'));
+      say({ role: 'user', text: `Mengunggah foto: ${file.name}`, image: ev.target.result });
+      say({ role: 'assistant', text: 'Foto dimuat ke kanvas. Ketik instruksi edit di chat, atau pakai panel **Alat Edit**.' });
+      showToast('Foto berhasil diunggah!', 'success');
+    };
+    r.readAsDataURL(file);
+  };
+
+  const send = async (custom = null, { forceEdit = false } = {}) => {
+    const prompt = (custom ?? input).trim();
+    if (!prompt || busy) return;
+    if (!cfg.key || !cfg.model) { setShowSettings(true); return showToast('Isi API key dan model dulu.', 'error'); }
+    if (custom === null) setInput('');
+    const wantsNew = ['buat foto baru', 'gambar baru', 'generate baru', 'mulai dari awal'].some(k => prompt.toLowerCase().includes(k));
+    const editing = Boolean(cur && (forceEdit || mode === 'edit' || (mode === 'auto' && !wantsNew)) && mode !== 'generate');
+    say({ role: 'user', text: prompt, badge: editing ? 'Edit Foto' : 'Buat Baru' });
+    setBusy(true);
+    try {
+      const image = editing ? ((isDirty ? await bake() : null) || cur) : null;
+      const out = await callApi(cfg, { prompt, image, aspect });
+      if (out.dataUrl) {
+        push(toImg(out.dataUrl, 'ai'));
+        say({ role: 'assistant', image: out.dataUrl, text: out.text || (editing ? 'Foto berhasil diedit. Mau ubah lagi?' : 'Foto baru berhasil dibuat. Minta edit lewat chat atau atur warnanya di panel kanan.') });
+        showToast(editing ? 'Foto berhasil diedit!' : 'Foto baru berhasil dibuat!', 'success');
+      } else {
+        say({ role: 'assistant', text: out.text || 'API tidak mengembalikan gambar. Periksa model dan format endpoint di pengaturan API.', isError: true });
+      }
+    } catch (e) {
+      say({ role: 'assistant', isError: true, text: `Gagal memproses: ${e.message}. Periksa URL, API key, model, dan format endpoint di pengaturan API.` });
+      showToast('Gagal memproses permintaan.', 'error');
+    } finally { setBusy(false); }
+  };
+
+  const download = async () => {
+    if (!cur) return;
+    const f = (isDirty ? await bake() : null) || cur;
+    const a = document.createElement('a');
+    a.href = f.dataUrl; a.download = `studio-foto-ai-${Date.now()}.${(f.mimeType.split('/')[1] || 'png').replace('jpeg', 'jpg')}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    showToast('Foto diunduh!', 'success');
+  };
+  const applyEdits = async () => { const b = await bake(); if (b) { push({ ...b, source: 'edited' }); showToast('Perubahan manual diterapkan!', 'success'); } };
+  const newCanvas = () => { setCur(null); syncHist({ items: [], index: -1 }); setNat({ w: 0, h: 0 }); if (mode === 'edit') setMode('auto'); resetAdj(); showToast('Kanvas dibersihkan.', 'info'); };
+  const setA = (k, v) => { setFilter('custom'); setAdj(p => ({ ...p, [k]: v })); };
+  const applyPreset = (p) => { setFilter(p.id); setAdj(prev => ({ ...prev, brightness: 100, contrast: 100, saturation: 100, sepia: 0, grayscale: 0, blur: 0, hue: 0, ...p, id: undefined, name: undefined })); };
+
+  const btn = 'cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed';
+  const tabBtn = (id, icon, label) => (
+    <button onClick={() => setTab(id)} className={`flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 ${tab === id ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5' : 'border-transparent text-slate-400'}`}>
+      <Ic n={icon} /> {label}{id === 'canvas' && cur && <span className="w-2 h-2 rounded-full bg-emerald-400" />}
+    </button>
+  );
+
+  return (
+    <div className="flex flex-col h-[100dvh] w-full bg-slate-950 text-slate-100 font-sans overflow-hidden">
+      {showSettings && <SettingsModal cfg={cfg} onClose={() => setShowSettings(false)}
+        onSave={(f) => { setCfg(f); localStorage.setItem('sfai_cfg', JSON.stringify(f)); setShowSettings(false); showToast('Pengaturan API disimpan.', 'success'); }} />}
+      {toast && (
+        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-2xl border backdrop-blur-md text-sm font-medium ${toast.type === 'error' ? 'bg-red-950/90 border-red-500/50 text-red-200' : 'bg-indigo-950/90 border-indigo-500/50 text-indigo-100'}`}>
+          <Ic n="sparkles" c="w-4 h-4 text-indigo-400 shrink-0" /> {toast.message}
+        </div>
+      )}
+
+      <header className="h-14 border-b border-slate-800/80 bg-slate-900/70 backdrop-blur-md px-4 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shrink-0"><Ic n="sparkles" c="w-5 h-5 text-white" /></div>
+          <div className="min-w-0">
+            <h1 className="font-bold text-base tracking-tight truncate">Studio Foto AI</h1>
+            <p className="text-xs text-slate-400 hidden sm:block truncate">{cfg.model ? `Model: ${cfg.model}` : 'Model belum diatur'}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input ref={fileRef} type="file" accept="image/*" onChange={upload} className="hidden" />
+          <button onClick={() => setShowSettings(true)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium ${btn}`}><Ic n="settings" c="w-3.5 h-3.5 text-indigo-400" /> API</button>
+          <button onClick={() => fileRef.current?.click()} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium ${btn}`}><Ic n="upload" c="w-3.5 h-3.5 text-indigo-400" /><span className="hidden sm:inline">Unggah</span></button>
+          {cur && <>
+            <button onClick={newCanvas} className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-red-950/60 border border-slate-700 text-xs font-medium ${btn}`}><Ic n="plus" c="w-3.5 h-3.5" /> Kanvas Baru</button>
+            <button onClick={download} className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-xs font-semibold ${btn}`}><Ic n="download" c="w-3.5 h-3.5" /> Unduh</button>
+          </>}
+        </div>
+      </header>
+
+      <div className="flex lg:hidden border-b border-slate-800 bg-slate-900/90 shrink-0">
+        {tabBtn('chat', 'chat', 'Chat AI')}{tabBtn('canvas', 'image', 'Kanvas')}{tabBtn('tools', 'sliders', 'Alat Edit')}
+      </div>
+
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        {/* Chat */}
+        <aside className={`${tab === 'chat' ? 'flex' : 'hidden'} lg:flex flex-col w-full lg:w-[320px] xl:w-[400px] border-r border-slate-800/80 bg-slate-900/40 shrink-0 min-h-0`}>
+          <div className="p-3 border-b border-slate-800/80 bg-slate-900/60 space-y-2.5 shrink-0">
+            <div className="grid grid-cols-3 bg-slate-950 p-1 rounded-xl border border-slate-800">
+              {[['auto', 'Otomatis'], ['generate', 'Buat Baru'], ['edit', 'Edit Foto']].map(([id, l]) => {
+                const locked = id === 'edit' && !cur;
+                return <button key={id} disabled={locked} onClick={() => setMode(id)}
+                  className={`py-1.5 rounded-lg text-xs font-medium ${btn} ${mode === id ? `${id === 'edit' ? 'bg-purple-600' : 'bg-indigo-600'} text-white shadow` : 'text-slate-400 hover:text-slate-200'}`}>{l}</button>;
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 shrink-0">Rasio foto baru</span>
+              <div className="flex gap-1 overflow-x-auto no-scrollbar">
+                {Object.keys(SIZES).map(r => <button key={r} onClick={() => setAspect(r)} className={`px-2 py-1 rounded-lg text-xs border shrink-0 cursor-pointer ${aspect === r ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200' : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'}`}>{r}</button>)}
+              </div>
+            </div>
+          </div>
+
+          <div ref={chatRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+            {messages.map(m => (
+              <div key={m.id} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+                <div className={`max-w-[88%] rounded-2xl p-3.5 text-[13px] leading-relaxed shadow-md select-text ${m.role === 'user' ? 'bg-gradient-to-br from-indigo-600 to-purple-600 rounded-br-none' : m.isError ? 'bg-red-950/60 border border-red-700/50 text-red-200 rounded-bl-none' : 'bg-slate-800/90 border border-slate-700/70 text-slate-200 rounded-bl-none'}`}>
+                  {m.badge && <span className="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-md bg-black/25 mb-1.5">{m.badge}</span>}
+                  <div className="whitespace-pre-line break-words">{renderInline(m.text)}</div>
+                  {m.image && (
+                    <div className="mt-2.5 relative rounded-xl overflow-hidden border border-white/10 bg-slate-950">
+                      <img src={m.image} alt="Hasil" className="w-full max-h-48 object-cover cursor-pointer" onClick={() => openInCanvas(m.image)} />
+                      <button onClick={() => openInCanvas(m.image)} className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-slate-900/80 text-xs font-medium border border-white/15 cursor-pointer">Buka di Kanvas</button>
+                    </div>
+                  )}
+                </div>
+                <span className="text-[11px] text-slate-500 mt-1 px-1">{m.role === 'user' ? 'Anda' : 'AI Studio'} • {m.timestamp}</span>
+              </div>
+            ))}
+            {busy && (
+              <div className="flex items-center gap-3 bg-slate-800/90 border border-slate-700/70 rounded-2xl rounded-bl-none p-3.5 text-xs w-fit">
+                <div className="w-5 h-5 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+                <div><p className="font-medium text-indigo-300">AI sedang memproses...</p><p className="text-slate-400 mt-0.5">Mohon tunggu beberapa detik</p></div>
+              </div>
+            )}
+          </div>
+
+          <div className="px-3 py-2 border-t border-slate-800/60 bg-slate-900/40 shrink-0">
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+              {QUICK_PROMPTS.map((q, i) => <button key={i} onClick={() => setInput(q)} title={q} className="shrink-0 text-xs px-2.5 py-1 rounded-lg bg-slate-800/70 hover:bg-slate-800 text-slate-300 border border-slate-700/60 truncate max-w-[210px] cursor-pointer">{q}</button>)}
+            </div>
+          </div>
+          <form onSubmit={(e) => { e.preventDefault(); send(); }} className="p-3 border-t border-slate-800 bg-slate-900/80 shrink-0">
+            <div className="flex items-end gap-2">
+              <textarea rows={2} value={input} onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
+                placeholder={cur && mode !== 'generate' ? 'Perintah edit foto (mis. ganti background jadi salju)...' : 'Deskripsikan foto yang ingin dibuat...'}
+                className="w-full bg-slate-950 border border-slate-700/80 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-sm placeholder-slate-500 outline-none resize-none" />
+              <button type="submit" disabled={!input.trim() || busy} className={`h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shrink-0 ${btn}`}><Ic n="send" /></button>
+            </div>
+          </form>
+        </aside>
+
+        {/* Kanvas */}
+        <main className={`${tab === 'canvas' ? 'flex' : 'hidden'} lg:flex flex-1 min-w-0 flex-col bg-slate-950 overflow-hidden`}>
+          <div className="h-12 shrink-0 border-b border-slate-800/80 bg-slate-900/30 px-4 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => goTo(hist.index - 1)} disabled={hist.index <= 0} title="Urungkan" className={`p-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 ${btn}`}><Ic n="undo" /></button>
+              <button onClick={() => goTo(hist.index + 1)} disabled={hist.index >= hist.items.length - 1} title="Ulangi" className={`p-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 ${btn}`}><Ic n="redo" /></button>
+              {hist.items.length > 0 && <span className="text-xs text-slate-500 ml-2">Versi {hist.index + 1} dari {hist.items.length}</span>}
+            </div>
+            {cur && <button onPointerDown={() => setCompare(true)} onPointerUp={() => setCompare(false)} onPointerLeave={() => setCompare(false)} onPointerCancel={() => setCompare(false)} onContextMenu={(e) => e.preventDefault()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs border border-slate-800 cursor-pointer select-none"><Ic n="eye" c="w-3.5 h-3.5 text-indigo-400" /> Tahan: tanpa filter</button>}
+          </div>
+
+          <div ref={stageRef} className="flex-1 min-h-0 flex items-center justify-center p-6 overflow-hidden relative" style={{ backgroundImage: 'radial-gradient(#1e293b 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
+            {busy && (
+              <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-3">
+                <div className="w-10 h-10 rounded-full border-4 border-indigo-400 border-t-transparent animate-spin" />
+                <p className="text-sm font-semibold">Sedang memproses dengan AI...</p>
+              </div>
+            )}
+            {cur ? (
+              <div className="relative rounded-xl shadow-2xl border border-slate-800/80 bg-slate-900/40" style={{ width: fit ? effW * fit : undefined, height: fit ? effH * fit : undefined, visibility: fit ? 'visible' : 'hidden' }}>
+                <img ref={imgRef} src={cur.dataUrl} alt="Kanvas" draggable={false}
+                  onLoad={(e) => setNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+                  style={{ filter: compare ? 'none' : cssFilter(adj.blur), transform: `rotate(${adj.rotation}deg) scaleX(${adj.flipH ? -1 : 1}) scaleY(${adj.flipV ? -1 : 1})`, transition: 'filter .15s ease, transform .25s ease',
+                    position: 'absolute', left: '50%', top: '50%', width: nat.w * fit, height: nat.h * fit, marginLeft: -(nat.w * fit) / 2, marginTop: -(nat.h * fit) / 2 }}
+                  className="select-none rounded-lg" />
+              </div>
+            ) : (
+              <div className="max-w-md w-full text-center p-8 rounded-3xl border border-dashed border-slate-800 bg-slate-900/40">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4 text-indigo-400"><Ic n="image" c="w-7 h-7" /></div>
+                <h2 className="text-lg font-bold mb-2">Kanvas masih kosong</h2>
+                <p className="text-sm text-slate-400 leading-relaxed mb-6">Ketik deskripsi di chat untuk membuat foto baru, atau unggah foto untuk diedit.</p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <button onClick={() => fileRef.current?.click()} className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm font-semibold ${btn}`}><Ic n="upload" c="w-4 h-4 text-indigo-400" /> Unggah foto</button>
+                  <button onClick={() => { setTab('chat'); send('Pemandangan futuristik kota Jakarta tahun 2088 dengan mobil terbang dan gedung hijau, sinematik'); }} className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-sm font-semibold ${btn}`}><Ic n="sparkles" /> Coba contoh</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {hist.items.length > 1 && (
+            <div className="h-20 shrink-0 border-t border-slate-800/80 bg-slate-900/60 px-4 flex items-center gap-3 overflow-x-auto">
+              <span className="text-xs font-medium text-slate-400 shrink-0">Riwayat:</span>
+              {hist.items.map((it, i) => (
+                <button key={i} onClick={() => goTo(i)} className={`w-12 h-12 rounded-lg overflow-hidden border-2 shrink-0 cursor-pointer transition ${i === hist.index ? 'border-indigo-500 shadow-md' : 'border-slate-700 opacity-60 hover:opacity-100'}`}>
+                  <img src={it.dataUrl} alt={`Versi ${i + 1}`} className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+        </main>
+
+        {/* Alat Edit */}
+        <aside className={`${tab === 'tools' ? 'flex' : 'hidden'} lg:flex flex-col w-full lg:w-[280px] xl:w-[320px] border-l border-slate-800/80 bg-slate-900/40 shrink-0 min-h-0 overflow-y-auto`}>
+          <div className="p-4 border-b border-slate-800/80 flex items-center justify-between shrink-0">
+            <h2 className="text-sm font-bold flex items-center gap-2"><Ic n="sliders" c="w-4 h-4 text-indigo-400" /> Alat Edit</h2>
+            <button onClick={resetAdj} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"><Ic n="rotate" c="w-3 h-3" /> Reset</button>
+          </div>
+          <div className="p-3 space-y-3">
+            <div className={CARD}>
+              <label className="text-xs font-semibold text-slate-300 mb-2.5 block">Edit cerdas AI sekali klik</label>
+              <div className="grid grid-cols-2 gap-2">
+                {MAGIC.map(m => <button key={m.label} disabled={!cur || busy} onClick={() => { setTab('canvas'); send(m.prompt, { forceEdit: true }); }}
+                  className={`px-2.5 py-2 rounded-xl bg-slate-800/90 hover:bg-indigo-950/60 border border-slate-700/70 text-xs font-medium text-left flex items-center gap-1.5 ${btn}`}><Ic n="sparkles" c="w-3 h-3 text-indigo-400 shrink-0" /><span className="truncate">{m.label}</span></button>)}
+              </div>
+            </div>
+            <div className={CARD}>
+              <label className="text-xs font-semibold text-slate-300 mb-2.5 block">Filter warna cepat</label>
+              <div className="grid grid-cols-3 gap-2">
+                {FILTER_PRESETS.map(p => <button key={p.id} disabled={!cur} onClick={() => applyPreset(p)}
+                  className={`px-2 py-2 rounded-xl text-xs font-medium border ${btn} ${filter === p.id ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200' : 'bg-slate-800/60 border-slate-700/70 text-slate-300 hover:bg-slate-800'}`}>{p.name}</button>)}
+              </div>
+            </div>
+            <div className={`${CARD} space-y-4`}>
+              <label className="text-xs font-semibold text-slate-300 block">Penyesuaian manual</label>
+              {[['brightness', 'Kecerahan', '%', 30, 200], ['contrast', 'Kontras', '%', 30, 200], ['saturation', 'Saturasi', '%', 0, 250], ['hue', 'Rona warna', '°', -180, 180], ['blur', 'Blur', 'px', 0, 15]]
+                .map(([k, l, u, mn, mx]) => <Slider key={k} label={l} unit={u} min={mn} max={mx} disabled={!cur} value={adj[k]} onChange={(v) => setA(k, v)} />)}
+            </div>
+            <div className={CARD}>
+              <label className="text-xs font-semibold text-slate-300 mb-2.5 block">Putar & balikkan</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[['rotate', 'Putar 90°', () => setAdj(p => ({ ...p, rotation: p.rotation + 90 }))], ['flipH', 'Horizontal', () => setAdj(p => ({ ...p, flipH: !p.flipH }))], ['flipV', 'Vertikal', () => setAdj(p => ({ ...p, flipV: !p.flipV }))]]
+                  .map(([ic, l, fn]) => <button key={ic} disabled={!cur} onClick={fn} className={`flex flex-col items-center gap-1 p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 text-xs ${btn}`}><Ic n={ic} c="w-4 h-4 text-indigo-400" />{l}</button>)}
+              </div>
+            </div>
+            {cur && <button onClick={applyEdits} disabled={!isDirty} className={`w-full py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 text-xs font-semibold flex items-center justify-center gap-2 ${btn}`}><Ic n="check" /> Simpan filter ke riwayat</button>}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
